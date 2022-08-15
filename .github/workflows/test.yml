@@ -1,0 +1,63 @@
+name: "perf tools test workflow"
+on: [push]
+env:
+  min_dependency: libelf-dev libdw-dev libaudit-dev libnuma-dev libpython3-dev libslang2-dev libunwind-dev libcap-dev libzstd-dev libbpf-dev libpfm4-dev systemtap-sdt-dev libtraceevent-dev llvm clang
+  full_dependency: libelf-dev libdw-dev libaudit-dev libnuma-dev libpython3-dev libperl-dev libslang2-dev libunwind-dev libbfd-dev libiberty-dev libcap-dev libzstd-dev libbpf-dev libpfm4-dev libbabeltrace-dev libgtk2.0-dev libopencsd-dev systemtap-sdt-dev libtraceevent-dev llvm clang
+  doc_dependency: asciidoc xmlto universal-ctags cscope
+
+jobs:
+  check-out:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check out the source code"
+        uses: actions/checkout@v3
+
+      - name: "Create a tarball"
+        run: make perf-targz-src-pkg && mv perf-*.tar.gz perf-src.tar.gz
+
+      - name: "Cache the tarball"
+        uses: actions/cache@v3
+        with:
+          path: perf-src.tar.gz
+          key: perf-${{ github.ref_name }}-tarball
+
+  run-perf-test:
+    runs-on: ubuntu-latest
+    needs: check-out
+    steps:
+      - name: "Retrieve the tarball"
+        uses: actions/cache@v3
+        with:
+          path: perf-src.tar.gz
+          key: perf-${{ github.ref_name }}-tarball
+
+      - name: "Extract the source"
+        run: tar xf perf-src.tar.gz --strip-components=1
+
+      - name: "Install dependencies"
+        run: sudo apt-get install -y --fix-missing ${{ env.min_dependency }}
+
+      - name: "Build it"
+        run: make -C tools/perf BUILD_BPF_SKEL=1
+
+      - name: "Run perf test"
+        run: sudo tools/perf/perf test
+
+  build-test:
+    runs-on: ubuntu-22.04
+    needs: check-out
+    steps:
+      - name: "Retrieve the tarball"
+        uses: actions/cache@v3
+        with:
+          path: perf-src.tar.gz
+          key: perf-${{ github.ref_name }}-tarball
+
+      - name: "Extract the source"
+        run: tar xf perf-src.tar.gz --strip-components=1
+
+      - name: "Install dependencies"
+        run: sudo apt-get install -y --fix-missing ${{ env.full_dependency }}
+
+      - name: "Run build test"
+        run: make -C tools/perf build-test
